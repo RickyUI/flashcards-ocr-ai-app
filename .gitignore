@@ -22,3 +22,8 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# Data
+data/
+chroma_db/
+data/chroma_db/

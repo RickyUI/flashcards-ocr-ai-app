@@ -1,8 +1,13 @@
+from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_community.vectorstores import Chroma
 import json
 import base64
 from dotenv import load_dotenv
+import uuid
+from langchain_openai import OpenAIEmbeddings
+from datetime import datetime
 
 load_dotenv()
 
@@ -60,6 +65,81 @@ def image_to_text(image_path: str) -> dict:
     except json.JSONDecodeError:
         return {"error": "El modelo no devolvió un JSON válido", "raw": response.content}
 
+def save_flashcards_to_db(flashcards: dict):
+    """
+    Guarda flashcards en ChromaDB, evitando duplicados por ID.
+    
+    Args:
+        flashcards: Dict con estructura {"flashcards": [{"palabra": ..., "traduccion": ..., "ejemplo_fr": ...}]}
+    
+    Returns:
+        Dict con vectorstore, cantidad agregada y duplicados encontrados
+    """
+    
+    # Conectar a DB (crea si no existe)
+    embeddings_function = OpenAIEmbeddings(model="text-embedding-3-small")
+    
+    vectorstore = Chroma(
+        persist_directory="data/chroma_db",
+        embedding_function=embeddings_function,
+        collection_name="flashcards"  # Nombre específico
+    )
+    
+    new_docs = []
+    new_ids = []
+    duplicates = []
+    
+    for flashcard in flashcards["flashcards"]:
+        # Normalizar
+        palabra_norm = flashcard["palabra"].strip().lower()
+        traduccion_norm = flashcard["traduccion"].strip().lower()
+        
+        # Generar ID determinístico
+        u_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, palabra_norm))
+        
+        # Verificar si ya existe
+        try:
+            existing = vectorstore.get(ids=[u_id])
+            if existing and existing['ids']:
+                duplicates.append(flashcard["palabra"])
+                continue
+        except Exception:
+            pass  # DB vacía o primer documento
+        
+        # Crear documento nuevo
+        new_docs.append(
+            Document(
+                page_content=f"{palabra_norm}\n{traduccion_norm}",
+                metadata={
+                    "id": u_id,
+                    "palabra": flashcard["palabra"],
+                    "traduccion": flashcard["traduccion"],
+                    "ejemplo_fr": flashcard["ejemplo_fr"],
+                    "created_at": datetime.now().isoformat(),
+                    # Para spaced repetition futuro:
+                    "times_reviewed": 0,
+                    "last_reviewed": None,
+                    "ease_factor": 2.5  # Algoritmo SM-2
+                }
+            )
+        )
+        new_ids.append(u_id)
+    
+    # Guardar solo los nuevos
+    if new_docs:
+        vectorstore.add_documents(documents=new_docs, ids=new_ids)
+        print(f"✅ Agregados {len(new_docs)} flashcards nuevos")
+    
+    if duplicates:
+        print(f"⚠️ Se encontraron {len(duplicates)} duplicados: {duplicates}")
+    
+    return {
+        "vectorstore": vectorstore,
+        "added": len(new_docs),
+        "duplicates": duplicates,
+        "total_in_db": len(vectorstore.get()['ids']) if vectorstore.get()['ids'] else 0
+    }
+
 
 if __name__ == "__main__":
     # Usamos la imagen de prueba
@@ -71,3 +151,7 @@ if __name__ == "__main__":
         print(json.dumps(resultado, indent=4, ensure_ascii=False))
     except Exception as e:
         print(f"Ocurrió un error: {e}")
+    
+    # Guardamos las flashcards en la base de datos
+    print(save_flashcards_to_db(resultado))
+    
