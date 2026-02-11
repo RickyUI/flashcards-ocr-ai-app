@@ -116,10 +116,6 @@ def save_flashcards_to_db(flashcards: dict):
                     "traduccion": flashcard["traduccion"],
                     "ejemplo_fr": flashcard["ejemplo_fr"],
                     "created_at": datetime.now().isoformat(),
-                    # Para spaced repetition futuro:
-                    "times_reviewed": 0,
-                    "last_reviewed": None,
-                    "ease_factor": 2.5  # Algoritmo SM-2
                 }
             )
         )
@@ -139,6 +135,32 @@ def save_flashcards_to_db(flashcards: dict):
         "duplicates": duplicates,
         "total_in_db": len(vectorstore.get()['ids']) if vectorstore.get()['ids'] else 0
     }
+
+def get_all_flashcards():
+    """
+    Obtiene todas las flashcards de la base de datos.
+    """
+    embeddings_function = OpenAIEmbeddings(model="text-embedding-3-small")
+    
+    vectorstore = Chroma(
+        persist_directory="data/chroma_db",
+        embedding_function=embeddings_function,
+        collection_name="flashcards"
+    )
+    
+    results = vectorstore.get()
+    
+    # Formateamos para que sea facil manejar en el frontend
+    flashcards = []
+    for flashcard in results['metadatas']:
+        flashcards.append({
+            "palabra": flashcard["palabra"],
+            "traduccion": flashcard["traduccion"],
+            "ejemplo_fr": flashcard["ejemplo_fr"]
+        })
+    
+    return flashcards
+    
 
 
 if __name__ == "__main__":
