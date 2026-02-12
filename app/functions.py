@@ -160,7 +160,60 @@ def get_all_flashcards():
         })
     
     return flashcards
+
+def delete_flashcard(palabra: str):
+    """
+    Elimina una flashcard de la base de datos.
+    """
+    embeddings_function = OpenAIEmbeddings(model="text-embedding-3-small")
+
+    vectorstore = Chroma(
+        persist_directory="data/chroma_db",
+        embeddings_function=embeddings_function,
+        collection_name="flashcards"
+    )
+
+    # Generamos el ID de la flashcard a eliminar (determinístico)
+    u_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, palabra.strip().lower()))
+
+    # Eliminamos la flashcard
+    vectorstore.delete(ids=[u_id])
+
+    print(f"✅ Flashcard eliminada: {palabra}")
+
+def ai_generate_flashcard(palabra: str):
+    """
+    Genera una flashcard para una palabra específica.
+    """
+    llm = ChatOpenAI(
+        model="gpt-4.1-mini",
+        temperature=0,
+        model_kwargs={"response_format": {"type": "json_object"}}
+    )
+
+    system_message = SystemMessage(
+        content=(
+            "Eres un asistente experto en aprendizaje de francés. "
+            "Tu tarea es generar una flashcard para la palabra proporcionada. "
+            "Para cada elemento encontrado, genera su traducción al español y un ejemplo de uso en francés. "
+            "Responde exclusivamente en formato JSON con esta estructura: "
+            "{\"flashcards\": [{\"palabra\": \"...\", \"traduccion\": \"...\", \"ejemplo_fr\": \"...\"}]}"
+        )
+    )
+
+    human_message = HumanMessage(
+        content=(
+            f"Genera una flashcard para la palabra: {palabra}"
+        )
+    )
+
+    response = llm.invoke([system_message, human_message])
     
+    # Parseamos la respuesta
+    try:
+        return json.loads(response.content)
+    except json.JSONDecodeError:
+        return {"error": "El modelo no devolvió un JSON válido", "raw": response.content}
 
 
 if __name__ == "__main__":
