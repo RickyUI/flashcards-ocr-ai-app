@@ -17,7 +17,7 @@ def image_to_text(image_path: str) -> dict:
     """
     # Configuramos el LLM para que devuelva estrictamente un objeto JSON
     llm = ChatOpenAI(
-        model="gpt-4.1-mini", 
+        model="gpt-4o-mini", 
         temperature=0,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
@@ -169,7 +169,7 @@ def delete_flashcard(palabra: str):
 
     vectorstore = Chroma(
         persist_directory="data/chroma_db",
-        embeddings_function=embeddings_function,
+        embedding_function=embeddings_function,
         collection_name="flashcards"
     )
 
@@ -186,7 +186,7 @@ def ai_generate_flashcard(palabra: str):
     Genera una flashcard para una palabra específica.
     """
     llm = ChatOpenAI(
-        model="gpt-4.1-mini",
+        model="gpt-4o-mini",
         temperature=0,
         model_kwargs={"response_format": {"type": "json_object"}}
     )
